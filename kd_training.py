@@ -50,7 +50,7 @@ def main():
     parser.add_argument('--batch', type=int, help='batch size',
                         default=64)
     parser.add_argument('--warmup', type=int, help='num of epochs',
-                        default=5)
+                        default=8000)
     parser.add_argument('--epochs', type=int, help='num of epochs',
                         default=20)
     parser.add_argument('--teachepochs', type=int, help='num of epochs',
@@ -78,11 +78,10 @@ def main():
                                   n_heads=8,
                                   dropout=0.1,
                                   n_lang=args.lang,
-                                  max_seq_len=300,
-                                  device=device)
+                                  max_seq_len=10000)
 
     model.to(device)
-
+    # model = nn.DataParallel(model, device_ids=[0, 1, 2, 3])
     train_txt = args.train
     train_set = RawFeatures(train_txt)
     valid_txt_3s = "/home/hexin/Desktop/hexin/datasets/lre17/LDC2017E23_lre2017_evaluation/utt2lan_200ms_3s.txt"
@@ -114,11 +113,11 @@ def main():
                                 collate_fn=collate_fn_atten)
     loss_func_CRE = nn.CrossEntropyLoss().to(device)
     KD_loss_func = nn.KLDivLoss(reduction='batchmean').to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
-    warm_up_with_cosine_lr = lambda epoch: epoch / args.warmup \
-        if epoch <= args.warmup \
-        else 0.5 * (math.cos((epoch - args.warmup) / (args.epochs - args.warmup) * math.pi) + 1)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9,0.98),eps=1e-9 , lr=args.lr)
+    warm_up_with_cosine_lr = lambda step: (512 ** (-0.5)) * min((step+1) ** (-0.5), (step+1) * args.warmup ** (-1.5))
+    # warm_up_with_cosine_lr = lambda epoch: epoch / args.warmup \
+    #     if epoch <= args.warmup \
+    #     else 0.5 * (math.cos((epoch - args.warmup) / (args.epochs - args.warmup) * math.pi) + 1)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warm_up_with_cosine_lr)
     # Train the model
     total_step = len(train_data)
@@ -129,29 +128,44 @@ def main():
             # utt_short = utt_short.to(device=device, dtype=torch.float)
             atten_mask = get_atten_mask(seq_len, utt_.size(0))
             atten_mask = atten_mask.to(device=device)
-            atten_mask_student = get_atten_mask_student(seq_len, utt_.size(0))
+            atten_mask_student = get_atten_mask_student(seq_len, utt_.size(0), mask_type='random')
             atten_mask_student = atten_mask_student.to(device=device)
+
+            # atten_mask_student2 = get_atten_mask_student(seq_len, utt_.size(0), utt_len=10)
+            # atten_mask_student2 = atten_mask_student2.to(device=device)
+
             labels = labels.to(device=device, dtype=torch.long)
             # Forward pass
             outputs = model(utt_, seq_len, atten_mask)
             outputs_student = model(utt_, seq_len, atten_mask_student)
+            #
+            # outputs_student2 = model(utt_, seq_len, atten_mask_student2)
+
             loss_teacher = loss_func_CRE(outputs, labels)
             loss_student = loss_func_CRE(outputs_student, labels)
+            # loss_student2 = loss_func_CRE(outputs_student2, labels)
             loss_kd = KD_loss_func(F.log_softmax(outputs_student/args.temperature, dim=1),
                                    F.softmax(outputs/args.temperature, dim=1)) * (args.temperature * args.temperature)
-
-            loss = 0.33*loss_teacher + 0.33*loss_student + 0.33*loss_kd
+            # loss_kd2 = KD_loss_func(F.log_softmax(outputs_student2/args.temperature, dim=1),
+            #                         F.softmax(outputs/args.temperature, dim=1)) * (args.temperature * args.temperature)
+            loss = 0.34 * loss_teacher + 0.33 * loss_student + 0.33 * loss_kd
+            # loss = 0.33 * loss_teacher + 0.16 * loss_student + 0.17 * loss_kd + 0.16* loss_student2 + 0.17 * loss_kd2
             # Backward and optimize
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            scheduler.step()
+
             if step % 2000 == 0:
                 print("Epoch [{}/{}], Step [{}/{}] Loss: {:.4f} loss_T: {:.4f} loss_S: {:.4f} loss_kd: {:.4f}".
                       format(epoch + 1, args.epochs, step + 1, total_step, loss.item(), loss_teacher.item(),
                              loss_student.item(), loss_kd.item()))
-        scheduler.step()
+                # print("Epoch [{}/{}], Step [{}/{}] Loss:{:.4f} T:{:.2f} S1:{:.2f} kd1:{:.2f} S2:{:.2f} kd2:{:.2f}".
+                #       format(epoch + 1, args.epochs, step + 1, total_step, loss.item(), loss_teacher.item(),
+                #              loss_student.item(), loss_kd.item(), loss_student2.item(), loss_kd2.item()))
+        print(get_lr(optimizer))
 
-        if epoch >= args.teachepochs:
+        if epoch >= args.epochs-5:
             torch.save(model.state_dict(), '/home/hexin/Desktop/models/' + '{}_epoch_{}.ckpt'.format(args.model, epoch))
             model.eval()
             correct = 0
@@ -179,7 +193,7 @@ def main():
             scoring.get_trials(valid_txt_3s, args.lang, trial_txt)
             scoring.get_score(valid_txt_3s, scores, args.lang, score_txt)
             eer_txt = trial_txt.replace('trial', 'eer')
-            subprocess.call(f"/home/hexin/Desktop/hexin/kaldi/egs/subtools/computeEER.sh "
+            subprocess.call(f"/home/hexin/kaldi/egs/subtools/computeEER.sh "
                             f"--write-file {eer_txt} {trial_txt} {score_txt}", shell=True)
 
             correct = 0
@@ -207,7 +221,7 @@ def main():
             scoring.get_trials(valid_txt_10s, args.lang, trial_txt)
             scoring.get_score(valid_txt_10s, scores, args.lang, score_txt)
             eer_txt = trial_txt.replace('trial', 'eer')
-            subprocess.call(f"/home/hexin/Desktop/hexin/kaldi/egs/subtools/computeEER.sh "
+            subprocess.call(f"/home/hexin/kaldi/egs/subtools/computeEER.sh "
                             f"--write-file {eer_txt} {trial_txt} {score_txt}", shell=True)
 
             correct = 0
@@ -235,7 +249,7 @@ def main():
             scoring.get_trials(valid_txt_30s, args.lang, trial_txt)
             scoring.get_score(valid_txt_30s, scores, args.lang, score_txt)
             eer_txt = trial_txt.replace('trial', 'eer')
-            subprocess.call(f"/home/hexin/Desktop/hexin/kaldi/egs/subtools/computeEER.sh "
+            subprocess.call(f"/home/hexin/kaldi/egs/subtools/computeEER.sh "
                             f"--write-file {eer_txt} {trial_txt} {score_txt}", shell=True)
 
 
