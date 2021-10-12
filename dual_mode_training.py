@@ -72,48 +72,16 @@ def main():
                                   dropout=0.1,
                                   n_lang=args.lang,
                                   max_seq_len=10000)
-    # model = oldX_Transformer_E2E_LID(input_dim=args.dim,
-    #                                 feat_dim=64,
-    #                                 d_k=64,
-    #                                 d_v=64,
-    #                                 d_ff=2048,
-    #                                 n_heads=8,
-    #                                 dropout=0.1,
-    #                                 n_lang=args.lang,
-    #                                 max_seq_len=10000,
-    #                                 device=device)
 
     model.to(device)
-    # model = nn.DataParallel(model, device_ids=[0, 1, 2, 3])
     train_txt = args.train
     train_set = RawFeatures(train_txt)
-    valid_txt_3s = "/home/hexin/Desktop/hexin/datasets/lre17/LDC2017E23_lre2017_evaluation/utt2lan_200ms_3s.txt"
-    valid_txt_10s = "/home/hexin/Desktop/hexin/datasets/lre17/LDC2017E23_lre2017_evaluation/utt2lan_200ms_10s.txt"
-    valid_txt_30s = "/home/hexin/Desktop/hexin/datasets/lre17/LDC2017E23_lre2017_evaluation/utt2lan_200ms_30s.txt"
-    valid_set_3s = RawFeatures(valid_txt_3s)
-    valid_set_10s = RawFeatures(valid_txt_10s)
-    valid_set_30s = RawFeatures(valid_txt_30s)
     train_data = DataLoader(dataset=train_set,
                             batch_size=args.batch,
                             pin_memory=False,
                             num_workers=16,
                             shuffle=True,
                             collate_fn=collate_fn_atten)
-    valid_data_3s = DataLoader(dataset=valid_set_3s,
-                               batch_size=1,
-                               pin_memory=True,
-                               shuffle=False,
-                               collate_fn=collate_fn_atten)
-    valid_data_10s = DataLoader(dataset=valid_set_10s,
-                                batch_size=1,
-                                pin_memory=True,
-                                shuffle=False,
-                                collate_fn=collate_fn_atten)
-    valid_data_30s = DataLoader(dataset=valid_set_30s,
-                                batch_size=1,
-                                pin_memory=False,
-                                shuffle=False,
-                                collate_fn=collate_fn_atten)
     loss_func_CRE = nn.CrossEntropyLoss().to(device)
     KD_loss_func = nn.KLDivLoss(reduction='batchmean').to(device)
     total_step = len(train_data)
@@ -131,11 +99,7 @@ def main():
     elif optimizer == 'cosine':
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs * total_step)
-
-    # warm_up_with_cosine_lr = lambda epoch: (epoch / args.warmup +1 / args.warmup) \
-    #     if epoch < args.warmup \
-    #     else 0.5 * (math.cos((epoch + 1 - args.warmup) / (args.epochs - args.warmup) * math.pi) + 1)
-    # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warm_up_with_cosine_lr)
+        
     # ====Train=====
     for epoch in tqdm(range(args.epochs)):
         model.train()
