@@ -42,19 +42,19 @@ def get_output(outputs, seq_len):
 def main():
     parser = argparse.ArgumentParser(description='paras for making data')
     parser.add_argument('--dim', type=int, help='dim of input features',
-                        default=437)
+                        default=1600)
     parser.add_argument('--model', type=str, help='model name',
                         default='Transformer')
     parser.add_argument('--train', type=str, help='training data, in .txt')
     # parser.add_argument('--test', type=str, help='testing data, in .txt')
     parser.add_argument('--batch', type=int, help='batch size',
-                        default=64)
+                        default=32)
     parser.add_argument('--warmup', type=int, help='num of epochs',
-                        default=5)
+                        default=12000)
     parser.add_argument('--epochs', type=int, help='num of epochs',
                         default=20)
     parser.add_argument('--lang', type=int, help='num of language classes',
-                        default=3)
+                        default=14)
     parser.add_argument('--lr', type=float, help='initial learning rate',
                         default=0.0001)
     parser.add_argument('--device', type=int, help='Device name',
