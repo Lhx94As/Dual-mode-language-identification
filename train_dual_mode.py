@@ -45,7 +45,7 @@ def main():
     parser.add_argument('--dim', type=int, help='dim of input features', default=80)
     parser.add_argument('--model', type=str, help='model name for saving', default='XSA_E2E')
     parser.add_argument('--train', type=str, help='training data, in .txt')
-    parser.add_argument('--batch', type=int, help='batch size', default=64)
+    parser.add_argument('--batch', type=int, help='batch size', default=32)
     parser.add_argument('--optim', type=str, help='optimizer', default='warmcosine')
     parser.add_argument('--warmup', type=int, help='num of steps', default=24000)
     parser.add_argument('--epochs', type=int, help='num of epochs', default=20)
