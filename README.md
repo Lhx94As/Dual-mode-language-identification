@@ -1,3 +1,2 @@
 # dual-mode-language-identification
-This is the source code of Dual mode language identification with knowledge distillation for short utterance  
-Submitted to ICASSP 2022
+This is the source code of the Odyssey 2022 paper:[Enhancing Language Identification using Dual-mode Model with Knowledge Distillation](https://www.isca-speech.org/archive/pdfs/odyssey_2022/liu22c_odyssey.pdf)
